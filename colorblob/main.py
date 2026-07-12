@@ -1,39 +1,50 @@
-import os
+"""程序入口。"""
+
+import threading
+
 import cv2
 
-from color_registry import HSVColorRegistry
-from detector import ColorBlobDetector
-from annotator import ResultAnnotator
+from camera_worker import camera_worker
+from config import MIN_AREA, TARGET_COLOR
 
 
 def main():
-    color_registry = HSVColorRegistry()
-    annotator = ResultAnnotator()
+    cv2.setUseOptimized(True)
 
-    target_color = 'red'
-    image_path = r"D:\Users\pengy\Downloads\chatgpt.png"
+    stop_event = threading.Event()
 
-    color_bounds = color_registry.get_color_bounds(target_color)
-    if color_bounds is None:
-        return
+    camera_thread = threading.Thread(
+        target=camera_worker,
+        args=(stop_event,),
+        daemon=True,
+    )
 
-    if not os.path.isfile(image_path):
-        print(f"无法找到图像文件: {image_path}")
-        return
+    camera_thread.start()
 
-    image = cv2.imread(image_path)
-    if image is None:
-        print(f"无法加载图片: {image_path}")
-        return
+    print()
+    print("====================================")
+    print("树莓派颜色识别程序已经启动。")
+    print("====================================")
+    print(f"识别颜色：{TARGET_COLOR}")
+    print(f"最小面积：{MIN_AREA}")
+    print()
+    print("按 Ctrl+C 停止程序。")
+    print("====================================")
+    print()
 
-    detector = ColorBlobDetector(color_bounds, resize_factor=0.5, min_area=800)
-    processed_image, contours, mask = detector.detect(image)
+    try:
+        while camera_thread.is_alive():
+            camera_thread.join(timeout=0.5)
 
-    final_image = annotator.annotate(processed_image, contours, target_color)
+    except KeyboardInterrupt:
+        print("\n收到 Ctrl+C，正在停止程序。")
 
-    cv2.imshow(f'Detected {target_color.upper()} Blobs', final_image)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    finally:
+        stop_event.set()
+
+        camera_thread.join(timeout=3.0)
+
+        print("程序已结束。")
 
 
 if __name__ == "__main__":
